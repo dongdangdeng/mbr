@@ -1,0 +1,7 @@
+﻿  mbr.cpp
+c:\users\mk928\source\repos\mbr\mbr.cpp(95): warning C4554: '&': 演算子の優先順位に問題があります。かっこを使用して優先順位を明確にしてください
+c:\users\mk928\source\repos\mbr\mbr.cpp(99): warning C4244: '*=': 'double' から 'int' への変換です。データが失われる可能性があります。
+  コードを生成中...
+  スキップ中... (関連する変更は検出されませんでした)
+  main.cpp
+  mbr.vcxproj -> C:\Users\mk928\source\repos\mbr\Debug\mbr.exe
