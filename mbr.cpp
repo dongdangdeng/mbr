@@ -4,6 +4,11 @@
 #include <WinBase.h>
 #define _USE_MATH_DEFINES
 #include <math.h>
+#include <iomanip> //時間を取得するため
+#include <time.h> //値を簡単に文字列にするため
+#include <string>
+#include <direct.h>
+#include <sys\stat.h>
 
 Mbr::Mbr()
 {
@@ -17,7 +22,9 @@ void Mbr::init()
 	range.x = -(range.size / 2);
 	range.y = -(range.size / 2);
 	nmax = 50;					//非マンデルブロ集合と判断する最大計算回数()
+	endFrag = false;
 	title = "Mandelbrot";
+	SetOutApplicationLogValidFlag(FALSE);	//log.txtを生成しない
 	ChangeWindowMode(TRUE);		//ウィンドウ表示モード
 	SetGraphMode(PX, PX + 75, 16);
 	SetBackgroundColor(0, 0, 0);
@@ -29,9 +36,8 @@ void Mbr::init()
 
 void Mbr::main()
 {
-	while (ProcessMessage() == 0) {
+	while (ProcessMessage() == 0 && !endFrag) {
 		draw();
-		//drawTest();
 		loupe();
 	}
 }
@@ -40,8 +46,6 @@ void Mbr::draw()
 {
 	mbrImg = MakeScreen(PX, PX, false);
 	SetDrawScreen(mbrImg);
-	double currentMax = 0;		//最大計算回数
-	//int mMap[PX][PX];
 	for (int i = 0; PX > i; i++) {
 		for (int j = 0; PX > j; j++) {
 			double x = i * range.size / PX + range.x;		//ウィンドウ座標から数学的座標に変換
@@ -51,7 +55,6 @@ void Mbr::draw()
 				DrawPixel(i / PX, j / PX, GetColor(0, 0, 0));
 			}else {
 				double h = (double)m / (double)nmax;
-				if (currentMax < h) currentMax = h;	//最大計算回数の更新
 				DrawPixel(i, j, ColorScaleBCGYR(h));
 			}
 			if (ProcessMessage() != 0) break;
@@ -66,21 +69,28 @@ void Mbr::draw()
 void Mbr::loupe() {
 	SetDrawScreen(DX_SCREEN_BACK);	//描画ウィンドウをBACKに
 
+	std::string filename;	//保存したファイルの名前
+	bool isShowSaveMessage = false;	//保存メッセージを表示するかどうか
+	bool successMkDir = true;		//画像保存フォルダが作成可能か
+	int successSave;				//保存が成功したか(0...成功 -1...失敗)
+	int frameCnt;			//ループ回数をカウントする(一定時間メッセージ表示する際等に使用)
 	bool isInWindow;	//マウスポインタがウィンドウ内にあるかどうか
 	while (ProcessMessage() == 0) {
 		GetMousePoint(&mouseX, &mouseY);	//マウスポインタの座標を更新
 		DrawGraph(0, 0, mbrImg, false);		//バッファ済みのマンテルブロ集合を表示
 		isInWindow = mouseX > 0 && mouseY > 0 && mouseX < PX && mouseY < PX;	//マウスポインタがウィンドウ内の場合trueが、それ以外だとfalseが代入される
+
 		//ルーペの表示範囲がウィンドウ外にはみ出さないように制限
 		if (mouseX - PX / 4 < 0) mouseX = PX / 4;
 		if (mouseY - PX / 4 < 0) mouseY = PX / 4;
 		if (mouseX + PX / 4 > PX) mouseX = PX - PX / 4;
 		if (mouseY + PX / 4 > PX) mouseY = PX - PX / 4;
-		if (isInWindow){
+		if (isInWindow){	//マウスカーソルの座標がウィンドウ内に存在する時
 			SetMouseDispFlag(FALSE);		//マウスカーソルを表示しない
 			//ルーペ枠
 			DrawBox(mouseX - PX / 4 - 1, mouseY - PX / 4 - 1, mouseX + PX / 4 + 1, mouseY + PX / 4 + 1, GetColor(0, 0, 0), false);
 			DrawBox(mouseX - PX / 4, mouseY - PX / 4, mouseX + PX / 4, mouseY + PX / 4, GetColor(255, 255, 255), false);
+			DrawBox(mouseX - PX / 4 + 1, mouseY - PX / 4 + 1, mouseX + PX / 4 - 1, mouseY + PX / 4 - 1, GetColor(0, 0, 0), false);
 			//ルーペ中心カーソル
 			DrawBox(mouseX - 2, mouseY - 7, mouseX + 2, mouseY + 7, GetColor(0, 0, 0), true);
 			DrawBox(mouseX - 7, mouseY - 2, mouseX + 7, mouseY + 2, GetColor(0, 0, 0), true);
@@ -92,19 +102,80 @@ void Mbr::loupe() {
 				range.x + (mouseX - PX / 4) * range.size / PX, 
 				range.y + (mouseY - PX / 4) * range.size / PX,nmax);
 
-			if (GetMouseInput() & MOUSE_INPUT_LEFT != 0) {	//左クリック時
+			if ((GetMouseInput() & MOUSE_INPUT_LEFT) != 0) {	//左クリック時
 				range.x = range.x + (mouseX - PX / 4) * range.size / PX;	//新しい右上座標を代入
 				range.y = range.y + (mouseY - PX / 4) * range.size / PX;
 				range.size /= 2.0;
-				nmax *= 1.1;
+				nmax = (int)(nmax * 1.1);
 				WaitTimer(100);	//待機時間(複数クリック判定になってしまうのを防ぐ)
 				return;
 			}
+
 		}
 		else {
 			SetMouseDispFlag(TRUE);		//マウスカーソルを表示
 		}
-		DrawString(0, PX + 50, "[Ctrl]:menu", GetColor(255,255,255));
+
+		GetHitKeyStateAll(KeyBuf);
+		DrawBox(0, PX + 50, PX, PX + 75, GetColor(0, 0, 0), TRUE);
+		if (KeyBuf[KEY_INPUT_LCONTROL] == 1 || KeyBuf[KEY_INPUT_RCONTROL] == 1) {	//Ctrlキーが押されている時
+			DrawString(0, PX + 50, "[S]save img / [I]initialize / [Q]quit", GetColor(255, 255, 255));
+			//Sキーが押されている時(画像保存)
+			if (KeyBuf[KEY_INPUT_S] == 1 && !isShowSaveMessage) {	//保存メッセージを表示中は保存を行わない(ファイル名が日時で管理されているため、連続で保存するとファイル名がダブる)
+				//現在日時を取得し、ファイル名に使用する
+				time_t t;
+				struct tm lt;
+				t = time(NULL);
+				localtime_s(&lt, &t);
+				
+				//画像保存フォルダの確認・無ければ作成
+				struct stat statBuf;
+				if (stat(saveDir.c_str(), &statBuf) != 0) {					//フォルダが存在しない場合、
+					if (_mkdir(saveDir.c_str()) != 0) successMkDir = false;	//フォルダを新規作成し、作成の成否をsuccessMkDirに返す
+				}
+
+				if (successMkDir) {
+					filename = saveDir + "/20" + std::to_string(lt.tm_year - 100) + "-" + std::to_string(lt.tm_mon + 1) + "-" + std::to_string(lt.tm_mday)
+						+ "-" + std::to_string(lt.tm_hour) + "-" + std::to_string(lt.tm_min) + "-" + std::to_string(lt.tm_sec) + ".bmp";
+					DrawGraph(0, 0, mbrImg, false);		//バッファ済みのマンテルブロ集合を表示(ルーペを消すため)
+					successSave = SaveDrawScreen(0, 0, PX, PX, filename.c_str());
+				} else {
+					successSave = -1;
+				}
+				isShowSaveMessage = true;
+				frameCnt = 60 * 2;	//2秒表示(60で1秒)
+			}
+
+			//Iキーが押されている時(画面初期化)
+			if (KeyBuf[KEY_INPUT_I] == 1) {
+				init();
+				return;
+			}
+
+			//Qキーが押されている時(終了)
+			if (KeyBuf[KEY_INPUT_Q] == 1) {
+				endFrag = true;
+				return;
+			}
+		} else {
+			DrawString(0, PX + 50, "[Ctrl]menu", GetColor(255,255,255));
+		}
+
+		if(isShowSaveMessage){	//画像保存した際、一定時間保存メッセージを表示する
+			//「save as ”ファイル名”」と表示
+			std::string saveMessage;
+			if (successSave == 0) {	//保存成功
+				saveMessage = "save as \"" + filename + "\"";
+			}else if (!successMkDir) {	//保存失敗(フォルダ作成失敗)
+				saveMessage = "faild to make directory";
+			} else {	//保存失敗(画像作成失敗)
+				saveMessage = "faild to save img";
+			}
+			DrawBox(0, PX + 50, PX, PX + 75, GetColor(0, 0, 0), TRUE);
+			DrawString(0, PX + 50, saveMessage.c_str(), GetColor(255, 255, 255));
+			frameCnt--;
+			if (frameCnt <= 0) isShowSaveMessage = false;
+		}
 		ScreenFlip();
 	}
 }

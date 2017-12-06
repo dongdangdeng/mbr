@@ -7,7 +7,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	Mbr mbr;
 	mbr.init();
 	mbr.main();
-	WaitKey();
 	mbr.end();
 
 	return 0;				// ソフトの終了 

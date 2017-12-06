@@ -1,5 +1,6 @@
 #ifndef MBR_HPP
 #define MBR_HPP
+#include <string>
 
 //Mbr* Mbr::me;
 
@@ -12,10 +13,13 @@ class Mbr {
 private:
 
 public:
+	const int PX = 400;	//描画範囲（ピクセル）	//PX...ウィンドウサイズ(正方形なのでw,h共通)
+	const std::string saveDir = "img";			//画像保存するフォルダ名
 	int nmax;			//発散しないと判定するまでの最大計算回数
 	int mbrImg;			//描画したマンテルブロ集合の画像を格納しているスクリーンID
 	int mouseX, mouseY;	//マウスポインタの座標(GetMousePoint( int *XBuf, int *YBuf )で取得)
-	const int PX = 400;	//描画範囲（ピクセル）	//PX...ウィンドウサイズ(正方形なのでw,h共通)
+	char KeyBuf[256];	//キー入力の状態を保持
+	bool endFrag;
 	graphRange_s range;
 	char* title;
 	//static Mbr *me;
